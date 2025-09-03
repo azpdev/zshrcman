@@ -1,0 +1,14 @@
+# Basic
+.DS_Store
+/build
+
+# Enviroment
+.env
+.env.*
+.*.env
+!.env.example
+!.example.env
+
+# Ai
+.claude
+

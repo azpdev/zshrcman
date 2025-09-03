@@ -1,0 +1,28 @@
+[package]
+name = "zshrcman"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "A Rust-based Zsh/dotfiles manager with Git integration"
+license = "MIT"
+repository = "https://github.com/yourusername/zshrcman"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+git2 = "0.18"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+dialoguer = "0.11"
+directories = "5.0"
+anyhow = "1.0"
+strsim = "0.11"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+colored = "2.1"
+
+[dev-dependencies]
+tempfile = "3.10"
+mockall = "0.12"
+assert_cmd = "2.0"
+predicates = "3.1"
