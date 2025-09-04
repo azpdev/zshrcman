@@ -10,6 +10,8 @@ use modules::{
     git_mgr::GitManager,
     init::InitManager,
     install::InstallManager,
+    state_manager::InstallationStateManager,
+    profile_switcher::ProfileSwitcher,
 };
 use strsim::jaro_winkler;
 
@@ -49,6 +51,9 @@ enum Commands {
     
     #[command(subcommand)]
     Alias(AliasCommands),
+    
+    #[command(subcommand)]
+    Profile(ProfileCommands),
     
     Status,
 }
@@ -119,6 +124,33 @@ enum AliasCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum ProfileCommands {
+    List,
+    
+    Create {
+        name: String,
+        #[arg(long, help = "Parent profile to inherit from")]
+        parent: Option<String>,
+    },
+    
+    Switch {
+        name: String,
+    },
+    
+    Delete {
+        name: String,
+    },
+    
+    Activate {
+        name: String,
+    },
+    
+    Deactivate,
+    
+    Current,
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -172,6 +204,8 @@ fn main() -> Result<()> {
         Commands::Device(cmd) => handle_device_command(cmd)?,
         
         Commands::Alias(cmd) => handle_alias_command(cmd)?,
+        
+        Commands::Profile(cmd) => handle_profile_command(cmd)?,
         
         Commands::Status => {
             let config_mgr = ConfigManager::new()?;
@@ -332,6 +366,71 @@ fn handle_alias_command(cmd: AliasCommands) -> Result<()> {
         
         AliasCommands::Toggle { group } => {
             alias_mgr.toggle(&group)?;
+        }
+    }
+    
+    Ok(())
+}
+
+fn handle_profile_command(cmd: ProfileCommands) -> Result<()> {
+    let config_mgr = ConfigManager::new()?;
+    let mut state_mgr = InstallationStateManager::new(config_mgr);
+    
+    match cmd {
+        ProfileCommands::List => {
+            println!("{}", "📋 Profiles:".bold());
+            for (name, _profile) in &state_mgr.profiles {
+                let is_active = state_mgr.active_profile.as_ref() == Some(name);
+                let marker = if is_active { " (active)".green() } else { "".normal() };
+                println!("  {}{}", name, marker);
+            }
+            
+            if state_mgr.profiles.is_empty() {
+                println!("  {}", "No profiles created yet".yellow());
+            }
+        }
+        
+        ProfileCommands::Create { name, parent } => {
+            state_mgr.create_profile(&name, parent)?;
+            println!("{} {}", "✅ Created profile:".green(), name);
+        }
+        
+        ProfileCommands::Switch { name } => {
+            let mut switcher = ProfileSwitcher::new(state_mgr);
+            switcher.switch_profile(&name)?;
+        }
+        
+        ProfileCommands::Delete { name } => {
+            if state_mgr.active_profile.as_ref() == Some(&name) {
+                anyhow::bail!("Cannot delete active profile. Switch to another profile first.");
+            }
+            
+            state_mgr.profiles.remove(&name);
+            // Save state through state manager
+            let config_mgr = ConfigManager::new()?;
+            let mut state_mgr_new = InstallationStateManager::new(config_mgr);
+            state_mgr_new.profiles = state_mgr.profiles;
+            state_mgr_new.save_state()?;
+            
+            println!("{} {}", "✅ Deleted profile:".green(), name);
+        }
+        
+        ProfileCommands::Activate { name } => {
+            let mut switcher = ProfileSwitcher::new(state_mgr);
+            switcher.activate_profile(&name)?;
+        }
+        
+        ProfileCommands::Deactivate => {
+            let mut switcher = ProfileSwitcher::new(state_mgr);
+            switcher.deactivate_current()?;
+        }
+        
+        ProfileCommands::Current => {
+            if let Some(current) = &state_mgr.active_profile {
+                println!("Current profile: {}", current.green());
+            } else {
+                println!("{}", "No active profile".yellow());
+            }
         }
     }
     

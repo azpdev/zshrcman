@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +19,15 @@ pub struct Config {
     
     #[serde(default)]
     pub status: HashMap<String, InstallStatus>,
+    
+    #[serde(default)]
+    pub profiles: HashMap<String, Profile>,
+    
+    #[serde(default)]
+    pub active_profile: Option<String>,
+    
+    #[serde(default)]
+    pub installations: HashMap<String, InstallationRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -121,6 +130,106 @@ impl Default for Config {
             },
             aliases: HashMap::new(),
             status: HashMap::new(),
+            profiles: HashMap::new(),
+            active_profile: None,
+            installations: HashMap::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Profile {
+    pub name: String,
+    pub parent: Option<String>,
+    pub packages: HashSet<String>,
+    pub environment: EnvironmentState,
+    pub os_overrides: HashMap<OsType, ProfileOverride>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileOverride {
+    pub packages: Vec<String>,
+    pub environment: Option<EnvironmentState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstallationRecord {
+    pub package: String,
+    pub version: Option<String>,
+    pub installed_at: chrono::DateTime<chrono::Utc>,
+    pub installed_by: InstallationSource,
+    pub active_for: HashSet<String>,
+    pub scope: InstallScope,
+    pub location: Option<PathBuf>,
+    pub installer_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum InstallationSource {
+    Profile(String),
+    Global,
+    System,
+    Manual,
+    Dependency(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum InstallScope {
+    System,
+    Global,
+    Profile,
+    Local,
+    Device,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentState {
+    pub paths_prepend: Vec<String>,
+    pub paths_append: Vec<String>,
+    pub variables: HashMap<String, String>,
+    pub aliases: HashMap<String, String>,
+    pub active: bool,
+}
+
+impl Default for EnvironmentState {
+    fn default() -> Self {
+        Self {
+            paths_prepend: Vec::new(),
+            paths_append: Vec::new(),
+            variables: HashMap::new(),
+            aliases: HashMap::new(),
+            active: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum OsType {
+    MacOS,
+    Windows,
+    Linux,
+    Universal,
+}
+
+impl OsType {
+    pub fn detect() -> Self {
+        if cfg!(target_os = "macos") {
+            OsType::MacOS
+        } else if cfg!(target_os = "windows") {
+            OsType::Windows
+        } else if cfg!(target_os = "linux") {
+            OsType::Linux
+        } else {
+            OsType::Universal
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RemovalStrategy {
+    Deactivate,
+    RemoveFromProfile,
+    SmartRemove,
+    ForceRemove,
+    MarkUnused,
 }
